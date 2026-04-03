@@ -1,10 +1,11 @@
 # Dataset — too large for git
 flipkart-dataset/
 
-# Trained model files — only model.pkl and vectorizer.pkl are tracked
+# Trained model files — model.pkl, vectorizer.pkl, and label_encoder.pkl are tracked
 backend/models/*
 !backend/models/model.pkl
 !backend/models/vectorizer.pkl
+!backend/models/label_encoder.pkl
 
 # Python
 venv/
