@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(
             "Dataset not found. Place the CSV in flipkart-dataset/ at the project root."
         )
-    df = pd.read_csv(files[0], usecols=["product_name", "Review", "Sentiment"])
+    df = pd.read_csv(files[0], usecols=["product_name", "Review", "Sentiment", "Rate"])
     df["Sentiment"] = df["Sentiment"].str.strip().str.lower()
     df.dropna(subset=["Review", "Sentiment"], inplace=True)
     product_names = sorted(df["product_name"].dropna().unique().tolist())

@@ -11,14 +11,40 @@ backend/models/*
 venv/
 __pycache__/
 *.pyc
+*.pyo
+.venv/
 
 # Node
 node_modules/
 dist/
+*.tsbuildinfo
 
 # Env
 .env
 .env.local
+.env.*.local
 
 # Ruff
 .ruff_cache/
+
+# Old frontend (dead code)
+frontend_old/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Old frontend (dead code)
+frontend_old/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

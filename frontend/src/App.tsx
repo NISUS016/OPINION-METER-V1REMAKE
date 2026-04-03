@@ -1,16 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Bell, Settings, User, TrendingUp, ArrowUpRight, History, Download, CheckCircle2, BrainCircuit, MessageSquare, Info, AlertCircle } from 'lucide-react';
-import { BarChart, Bar, XAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
+import { Search, ArrowUpRight, History, CheckCircle2, BrainCircuit, MessageSquare, AlertCircle, X, Star } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { cn } from './lib/utils';
-import { POPULAR_ANALYSIS, RECENT_SEARCHES } from './constants';
 
 // --- Types ---
-interface SentimentResult {
-  label: 'positive' | 'neutral' | 'negative';
-  confidence: number;
-}
-
 interface Review {
   product_name: string;
   text: string;
@@ -27,33 +21,74 @@ interface AnalysisSummary {
   total: number;
 }
 
+interface ProductCard {
+  name: string;
+  category: string;
+  reviewCount: number;
+}
+
+// --- API Config ---
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}` : '';
+
+// --- Helpers ---
+function highlightMatch(text: string, query: string) {
+  if (!query) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="font-bold text-primary">{text.slice(idx, idx + query.length)}</span>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+function getSearchHistory(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem('opinion-meter-history') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function addToHistory(query: string) {
+  try {
+    const history = getSearchHistory();
+    const filtered = history.filter((h) => h.toLowerCase() !== query.toLowerCase());
+    filtered.unshift(query);
+    localStorage.setItem('opinion-meter-history', JSON.stringify(filtered.slice(0, 8)));
+  } catch {
+    // ignore
+  }
+}
+
+function renderStars(rate: string | number | undefined) {
+  const num = Number(rate);
+  if (isNaN(num) || num < 1 || num > 5) return null;
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {[...Array(5)].map((_, i) => (
+        <Star
+          key={i}
+          size={14}
+          className={cn(
+            i < Math.round(num) ? 'fill-amber-400 text-amber-400' : 'text-surface-container-highest'
+          )}
+        />
+      ))}
+      <span className="ml-1 text-xs font-bold text-on-surface-variant">{num}</span>
+    </span>
+  );
+}
+
 // --- Shared Components ---
 
-const Navbar = () => (
+const Navbar = ({ onHome }: { onHome: () => void }) => (
   <header className="sticky top-0 z-50 glass shadow-ambient px-8 py-4">
     <nav className="max-w-7xl mx-auto flex justify-between items-center">
       <div className="flex items-center gap-12">
-        <span className="text-xl font-headline font-extrabold tracking-tight">Opinion-Meter</span>
-        <div className="hidden md:flex gap-8">
-          <a href="#" className="text-sm font-headline font-bold border-b-2 border-primary pb-1">Dashboard</a>
-          <a href="#" className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">Analytics</a>
-          <a href="#" className="text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors">History</a>
-        </div>
-      </div>
-      <div className="flex items-center gap-4">
-        <button className="p-2 hover:bg-surface-container-high rounded-full transition-colors">
-          <Bell size={20} />
-        </button>
-        <button className="p-2 hover:bg-surface-container-high rounded-full transition-colors">
-          <Settings size={20} />
-        </button>
-        <div className="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden ring-2 ring-surface-container-high">
-          <img 
-            src="https://picsum.photos/seed/user/100/100" 
-            alt="User" 
-            className="w-full h-full object-cover"
-          />
-        </div>
+        <button onClick={onHome} className="text-xl font-headline font-extrabold tracking-tight hover:opacity-80 transition-opacity">Opinion-Meter</button>
       </div>
     </nav>
   </header>
@@ -68,7 +103,7 @@ const Footer = () => (
           Elevating raw sentiment data into actionable product insights. Powered by NLTK and Logistic Regression.
         </p>
         <p className="mt-8 text-xs text-on-surface-variant/60">
-          © 2024 Opinion-Meter. All rights reserved.
+          © 2026 Opinion-Meter. All rights reserved.
         </p>
       </div>
       <div className="flex flex-wrap gap-x-12 gap-y-4 md:justify-end">
@@ -84,29 +119,103 @@ const Footer = () => (
 
 // --- Views ---
 
-const LandingView = ({ onSearch, error }: { onSearch: (query: string) => void, error: string }) => {
+const LandingView = ({
+  onSearch,
+  error,
+  featured,
+  history,
+}: {
+  onSearch: (query: string) => void;
+  error: string;
+  featured: ProductCard[];
+  history: string[];
+}) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (query.length < 2) {
+  const fetchSuggestions = useCallback(async (value: string) => {
+    if (value.length < 2) {
       setSuggestions([]);
+      setShowDropdown(false);
       return;
     }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/suggest?q=${encodeURIComponent(query)}&limit=5`);
-        const data = await res.json();
-        setSuggestions(data.suggestions || []);
-      } catch (err) {
-        console.error("Suggestion error:", err);
+    try {
+      const res = await fetch(`${API_BASE}/api/suggest?q=${encodeURIComponent(value)}&limit=10`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setSuggestions(data.suggestions || []);
+      setShowDropdown(true);
+      setActiveIndex(-1);
+    } catch (err) {
+      console.error('Suggestion error:', err);
+      setSuggestions([]);
+      setShowDropdown(false);
+    }
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(value), 300);
+  };
+
+  const handleSelect = (name: string) => {
+    setQuery(name);
+    setShowDropdown(false);
+    setSuggestions([]);
+    onSearch(name);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowDropdown(false);
+    if (query.trim()) {
+      onSearch(query.trim());
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showDropdown || suggestions.length === 0) {
+      if (e.key === 'Enter') handleSubmit(e);
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIndex >= 0) {
+        handleSelect(suggestions[activeIndex]);
+      } else {
+        handleSubmit(e);
       }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query]);
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
@@ -119,76 +228,120 @@ const LandingView = ({ onSearch, error }: { onSearch: (query: string) => void, e
         </p>
       </div>
 
-      <div className="max-w-3xl mx-auto mb-24 relative">
+      <div className="max-w-3xl mx-auto mb-24 relative" ref={dropdownRef}>
         {error && (
           <div className="mb-6 bg-red-50 border border-red-100 text-red-600 p-4 rounded-xl flex items-center gap-3 text-sm">
             <AlertCircle size={18} />
             {error}
           </div>
         )}
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-            <Search className="text-on-surface-variant group-focus-within:text-primary transition-colors" size={24} />
-          </div>
-          <input 
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onSearch(query)}
-            placeholder="Search for a product (e.g. phone, cooler, shirt)..."
-            className="w-full pl-16 pr-24 py-6 bg-surface-container-lowest rounded-xl shadow-ambient text-xl focus:ring-2 focus:ring-primary/10 outline-none transition-all"
-          />
-        </div>
-
-        {suggestions.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl z-50 overflow-hidden border border-surface-container-high">
-            {suggestions.map((s, i) => (
-              <button 
-                key={i}
-                onClick={() => onSearch(s)}
-                className="w-full text-left px-6 py-4 hover:bg-surface-container-low transition-colors text-sm font-bold border-b border-surface-container-high last:border-0"
+        <form onSubmit={handleSubmit}>
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+              <Search className="text-on-surface-variant group-focus-within:text-primary transition-colors" size={24} />
+            </div>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+              placeholder="Search for a product (e.g. phone, cooler, shirt)..."
+              className="w-full pl-16 pr-12 py-6 bg-surface-container-lowest rounded-xl shadow-ambient text-xl focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('');
+                  setSuggestions([]);
+                  setShowDropdown(false);
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-surface-container-highest hover:text-on-surface-variant transition-colors"
               >
-                {s}
+                <X size={20} />
               </button>
-            ))}
+            )}
           </div>
-        )}
+        </form>
+
+        <AnimatePresence>
+          {showDropdown && suggestions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.15 }}
+              className="absolute top-full left-0 right-0 mt-2 bg-surface-container-lowest rounded-xl shadow-2xl z-50 overflow-hidden border border-surface-container-high"
+            >
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onMouseDown={() => handleSelect(s)}
+                  className={cn(
+                    'w-full text-left px-6 py-4 text-sm font-bold transition-colors border-b border-surface-container-high last:border-0',
+                    i === activeIndex ? 'bg-primary/5 text-primary' : 'hover:bg-surface-container-low'
+                  )}
+                >
+                  {highlightMatch(s, query)}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-8">
-          <h2 className="text-2xl font-headline font-bold mb-8">Featured Product Analysis</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {POPULAR_ANALYSIS.map((item) => (
-              <div key={item.id} onClick={() => onSearch(item.name)} className="bg-surface-container-lowest p-8 rounded-xl shadow-ambient group cursor-pointer hover:translate-y-[-4px] transition-all">
-                <div className="flex justify-between items-start mb-6">
-                  <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold tracking-widest rounded-full">{item.category}</span>
-                  <ArrowUpRight size={20} className="text-on-surface-variant group-hover:text-primary transition-colors" />
+        {featured.length > 0 && (
+          <div className="lg:col-span-8">
+            <h2 className="text-2xl font-headline font-bold mb-8">Top Products by Review Volume</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {featured.map((item, i) => (
+                <div
+                  key={i}
+                  onClick={() => onSearch(item.name)}
+                  className="bg-surface-container-lowest p-8 rounded-xl shadow-ambient group cursor-pointer hover:translate-y-[-4px] transition-all"
+                >
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold tracking-widest rounded-full">{item.category}</span>
+                    <ArrowUpRight size={20} className="text-on-surface-variant group-hover:text-primary transition-colors" />
+                  </div>
+                  <h3 className="text-xl font-headline font-bold mb-3">{item.name}</h3>
+                  <p className="text-sm text-on-surface-variant leading-relaxed mb-8">
+                    {item.reviewCount} reviews in dataset
+                  </p>
+                  <div className="text-sm font-bold">Click to analyze sentiment</div>
                 </div>
-                <h3 className="text-xl font-headline font-bold mb-3">{item.name}</h3>
-                <p className="text-sm text-on-surface-variant leading-relaxed mb-8">{item.description}</p>
-                <div className="text-sm font-bold">{item.positivePercentage}% Positive Overall</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="lg:col-span-4 space-y-8">
-          <div className="bg-surface-container-low p-8 rounded-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <History size={20} className="text-on-surface-variant" />
-              <h3 className="font-headline font-bold">Recent History</h3>
-            </div>
-            <div className="space-y-4">
-              {RECENT_SEARCHES.map((search) => (
-                <button key={search} onClick={() => onSearch(search)} className="w-full flex items-center gap-3 text-sm text-on-surface-variant hover:text-primary transition-colors text-left">
-                  <Search size={14} />
-                  {search}
-                </button>
               ))}
             </div>
           </div>
-        </div>
+        )}
+
+        {history.length > 0 && (
+          <div className={cn('lg:col-span-4 space-y-8', featured.length === 0 && 'lg:col-span-12 max-w-md mx-auto')}>
+            <div className="bg-surface-container-low p-8 rounded-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <History size={20} className="text-on-surface-variant" />
+                <h3 className="font-headline font-bold">Recent Searches</h3>
+              </div>
+              <div className="space-y-4">
+                {history.map((search, i) => (
+                  <button
+                    key={`${search}-${i}`}
+                    onClick={() => onSearch(search)}
+                    className="w-full flex items-center gap-3 text-sm text-on-surface-variant hover:text-primary transition-colors text-left"
+                  >
+                    <Search size={14} />
+                    {search}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -208,7 +361,7 @@ const LoadingView = ({ count }: { count: number }) => {
   }, []);
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -219,7 +372,7 @@ const LoadingView = ({ count }: { count: number }) => {
           <div className="relative w-64 h-64">
             <svg className="w-full h-full -rotate-90">
               <circle cx="128" cy="128" r="110" className="stroke-surface-container-high fill-none" strokeWidth="2" />
-              <motion.circle 
+              <motion.circle
                 cx="128" cy="128" r="110" className="stroke-primary fill-none" strokeWidth="6" strokeLinecap="round" strokeDasharray="691"
                 animate={{ strokeDashoffset: 691 - (691 * progress) / 100 }}
               />
@@ -234,7 +387,7 @@ const LoadingView = ({ count }: { count: number }) => {
         <div className="lg:col-span-7">
           <h1 className="text-4xl font-headline font-extrabold mb-4">Neural Synthesis in Progress...</h1>
           <p className="text-on-surface-variant mb-12 max-w-md">
-            Processing {count} raw reviews through our Logistic Regression pipeline to classify sentiment nuance.
+            Processing {count} raw reviews through our ML pipeline to classify sentiment nuance.
           </p>
 
           <div className="space-y-4">
@@ -261,12 +414,11 @@ const LoadingView = ({ count }: { count: number }) => {
 };
 
 const DashboardView = ({ query, results, summary }: { query: string, results: Review[], summary: AnalysisSummary }) => {
-  const [activeTab, setActiveTab] = useState('overall');
-
+  const safeTotal = summary.total || 1;
   const chartData = [
-    { name: 'POS', value: Math.round((summary.positive / summary.total) * 100) },
-    { name: 'NEU', value: Math.round((summary.neutral / summary.total) * 100) },
-    { name: 'NEG', value: Math.round((summary.negative / summary.total) * 100) }
+    { name: 'POS', value: Math.round((summary.positive / safeTotal) * 100) },
+    { name: 'NEU', value: Math.round((summary.neutral / safeTotal) * 100) },
+    { name: 'NEG', value: Math.round((summary.negative / safeTotal) * 100) }
   ];
 
   const dominant = Object.entries(summary)
@@ -275,6 +427,27 @@ const DashboardView = ({ query, results, summary }: { query: string, results: Re
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-7xl mx-auto px-8 py-12 space-y-12">
+      {/* Stat Cards */}
+      <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-ambient">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Total Reviews</div>
+          <div className="text-3xl font-headline font-extrabold">{summary.total.toLocaleString()}</div>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-ambient">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Positive</div>
+          <div className="text-3xl font-headline font-extrabold text-sentiment-positive">{summary.positive.toLocaleString()}</div>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-ambient">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Neutral</div>
+          <div className="text-3xl font-headline font-extrabold text-sentiment-neutral">{summary.neutral.toLocaleString()}</div>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-6 shadow-ambient">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Negative</div>
+          <div className="text-3xl font-headline font-extrabold text-sentiment-negative">{summary.negative.toLocaleString()}</div>
+        </div>
+      </section>
+
+      {/* Verdict + Composition */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl p-10 relative overflow-hidden border-t-2 border-primary shadow-ambient flex flex-col justify-between min-h-[320px]">
           <div>
@@ -285,13 +458,13 @@ const DashboardView = ({ query, results, summary }: { query: string, results: Re
             </p>
           </div>
           <div className="mt-12 flex items-center gap-6">
-            <div className={cn("w-16 h-16 rounded-full flex items-center justify-center text-white", 
+            <div className={cn("w-16 h-16 rounded-full flex items-center justify-center text-white",
               dominant === 'positive' ? 'bg-sentiment-positive' : dominant === 'neutral' ? 'bg-sentiment-neutral' : 'bg-sentiment-negative')}>
               <CheckCircle2 size={32} />
             </div>
             <div>
               <div className="font-headline font-extrabold text-2xl uppercase">{dominant} SENTIMENT</div>
-              <div className="text-on-surface-variant font-medium">Model Confidence: {(summary[dominant as keyof AnalysisSummary] / summary.total * 100).toFixed(1)}%</div>
+              <div className="text-on-surface-variant font-medium">Model Confidence: {(summary[dominant as keyof AnalysisSummary] / safeTotal * 100).toFixed(1)}%</div>
             </div>
           </div>
         </div>
@@ -300,9 +473,9 @@ const DashboardView = ({ query, results, summary }: { query: string, results: Re
           <h3 className="font-headline text-xl font-bold mb-8">Composition</h3>
           <div className="space-y-8">
             {[
-              { label: 'Positive', val: Math.round((summary.positive / summary.total) * 100), color: 'bg-sentiment-positive' },
-              { label: 'Neutral', val: Math.round((summary.neutral / summary.total) * 100), color: 'bg-sentiment-neutral' },
-              { label: 'Negative', val: Math.round((summary.negative / summary.total) * 100), color: 'bg-sentiment-negative' }
+              { label: 'Positive', val: Math.round((summary.positive / safeTotal) * 100), color: 'bg-sentiment-positive' },
+              { label: 'Neutral', val: Math.round((summary.neutral / safeTotal) * 100), color: 'bg-sentiment-neutral' },
+              { label: 'Negative', val: Math.round((summary.negative / safeTotal) * 100), color: 'bg-sentiment-negative' }
             ].map((item) => (
               <div key={item.label} className="space-y-3">
                 <div className="flex justify-between items-end">
@@ -318,45 +491,56 @@ const DashboardView = ({ query, results, summary }: { query: string, results: Re
         </div>
       </section>
 
+      {/* Pie Chart */}
       <section className="bg-surface-container-lowest rounded-xl p-8 shadow-ambient">
-        <div className="flex justify-between items-center mb-12">
-          <h2 className="font-headline text-2xl font-bold">Distribution Profile</h2>
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="font-headline text-2xl font-bold">Sentiment Breakdown</h2>
         </div>
-        <div className="h-[200px] w-full max-w-md mx-auto">
+        <div className="h-[250px] w-full max-w-sm mx-auto">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
-              <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={90}
+                label={({ name, value }) => `${name} ${value}%`}
+              >
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.name === 'POS' ? '#10b981' : entry.name === 'NEG' ? '#ef4444' : '#6b7280'} />
                 ))}
-              </Bar>
-            </BarChart>
+              </Pie>
+              <Tooltip formatter={(value: number) => `${value}%`} />
+            </PieChart>
           </ResponsiveContainer>
         </div>
       </section>
 
-      <section className="space-y-8">
-        <h2 className="font-headline text-3xl font-extrabold text-center">Individual Evidence</h2>
-        <div className="space-y-4">
+      {/* Review Cards */}
+      <section className="space-y-6">
+        <h2 className="font-headline text-2xl font-bold text-center">Individual Reviews</h2>
+        <div className="space-y-3">
           {results.map((review, i) => (
-            <div key={i} className="bg-surface-container-lowest p-8 rounded-xl shadow-ambient flex flex-col md:flex-row gap-8 relative overflow-hidden">
-              <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", 
+            <div key={i} className="bg-surface-container-lowest p-5 rounded-xl shadow-ambient flex flex-col sm:flex-row gap-4 relative overflow-hidden">
+              <div className={cn("absolute left-0 top-0 bottom-0 w-1",
                 review.label === 'positive' ? "bg-sentiment-positive" : review.label === 'neutral' ? "bg-sentiment-neutral" : "bg-sentiment-negative")} />
               <div className="flex-1">
-                <p className="text-lg font-medium italic text-on-surface">"{review.text}"</p>
-                <div className="flex items-center gap-4 mt-6 text-xs font-bold text-on-surface-variant uppercase">
-                  <span>Rating: {review.rate || 'N/A'} ★</span>
-                  <span>Source: Flipkart Dataset</span>
+                <p className="text-sm font-medium text-on-surface">"{review.text}"</p>
+                <div className="flex items-center gap-3 mt-3 text-xs text-on-surface-variant">
+                  {renderStars(review.rate) || <span>Rating: {review.rate || 'N/A'}</span>}
                 </div>
               </div>
-              <div className="flex items-center gap-6 shrink-0 md:pl-8 border-l border-surface-container-high">
+              <div className="flex items-center gap-4 shrink-0 sm:pl-4 border-l border-surface-container-high">
                 <div className="text-right">
-                  <div className="text-[10px] font-bold text-on-surface-variant uppercase mb-1">AI Prediction</div>
-                  <div className={cn("text-xl font-headline font-extrabold uppercase", 
+                  <div className={cn("text-sm font-bold uppercase",
                     review.label === 'positive' ? "text-sentiment-positive" : review.label === 'neutral' ? "text-sentiment-neutral" : "text-sentiment-negative")}>
                     {review.label}
                   </div>
+                  {review.confidence != null && (
+                    <div className="text-xs text-on-surface-variant">{(review.confidence * 100).toFixed(0)}%</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -376,60 +560,90 @@ export default function App() {
   const [summary, setSummary] = useState<AnalysisSummary | null>(null);
   const [error, setError] = useState('');
   const [foundCount, setFoundCount] = useState(0);
+  const [featured, setFeatured] = useState<ProductCard[]>([]);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+
+  // Load featured products and search history on mount
+  useEffect(() => {
+    setSearchHistory(getSearchHistory());
+    // Fetch top products by review count from the dataset
+    fetch(`${API_BASE}/api/suggest?q=a&limit=10`)
+      .then((res) => res.ok ? res.json() : { suggestions: [] })
+      .then((data) => {
+        const suggestions = data.suggestions || [];
+        // Pick a diverse set of real product names from suggestions
+        const picks: ProductCard[] = suggestions.slice(0, 4).map((name: string) => ({
+          name,
+          category: name.toLowerCase().includes('phone') || name.toLowerCase().includes('mobile') ? 'MOBILE'
+            : name.toLowerCase().includes('shirt') || name.toLowerCase().includes('t-shirt') ? 'CLOTHING'
+            : name.toLowerCase().includes('cooler') || name.toLowerCase().includes('fan') ? 'APPLIANCES'
+            : 'GENERAL',
+          reviewCount: 0,
+        }));
+        setFeatured(picks);
+      })
+      .catch(() => setFeatured([]));
+  }, []);
 
   const handleSearch = async (searchQuery: string) => {
     if (!searchQuery) return;
     setQuery(searchQuery);
     setError('');
-    
+
     try {
       // 1. Search
-      const searchRes = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&limit=50`);
+      const searchRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(searchQuery)}&limit=50`);
+      if (!searchRes.ok) throw new Error(`Search failed with status ${searchRes.status}`);
       const searchData = await searchRes.json();
-      
+
       if (!searchData.reviews || searchData.reviews.length === 0) {
         setError("No reviews found for this product.");
         return;
       }
 
       setFoundCount(searchData.reviews.length);
+      addToHistory(searchQuery);
+      setSearchHistory(getSearchHistory());
       setView('loading');
 
       // 2. Analyze
-      const reviewTexts = searchData.reviews.map((r: any) => r.text);
-      const analyzeRes = await fetch('/api/analyze', {
+      const reviewTexts = searchData.reviews.map((r: any) => r.text || '');
+      const analyzeRes = await fetch(`${API_BASE}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviews: reviewTexts })
       });
+      if (!analyzeRes.ok) throw new Error(`Analysis failed with status ${analyzeRes.status}`);
       const analyzeData = await analyzeRes.json();
 
       // 3. Combine
       const combined = searchData.reviews.map((r: any, i: number) => ({
         ...r,
-        label: analyzeData.results[i].label,
-        confidence: analyzeData.results[i].confidence
+        label: analyzeData.results?.[i]?.label || 'neutral',
+        confidence: analyzeData.results?.[i]?.confidence || 0
       }));
 
       setResults(combined);
-      setSummary(analyzeData.summary);
-      
+      setSummary(analyzeData.summary || { positive: 0, neutral: 0, negative: 0, total: combined.length });
+
       // Delay slightly for dramatic effect of loading screen
       setTimeout(() => setView('dashboard'), 1500);
-      
-    } catch (err) {
+
+    } catch (err: any) {
       console.error(err);
-      setError("An error occurred while fetching analysis.");
+      setError(err.message || "An error occurred while fetching analysis.");
       setView('landing');
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FDFDFE]">
-      <Navbar />
+      <Navbar onHome={() => setView('landing')} />
       <main className="flex-1">
         <AnimatePresence mode="wait">
-          {view === 'landing' && <LandingView key="landing" onSearch={handleSearch} error={error} />}
+          {view === 'landing' && (
+            <LandingView key="landing" onSearch={handleSearch} error={error} featured={featured} history={searchHistory} />
+          )}
           {view === 'loading' && <LoadingView key="loading" count={foundCount} />}
           {view === 'dashboard' && summary && <DashboardView key="dashboard" query={query} results={results} summary={summary} />}
         </AnimatePresence>

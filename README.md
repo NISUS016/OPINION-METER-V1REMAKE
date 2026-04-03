@@ -36,7 +36,7 @@ npm run dev
 ### 4. Open in browser
 
 ```
-http://localhost:5173
+http://localhost:3000
 ```
 
 ## How It Works
