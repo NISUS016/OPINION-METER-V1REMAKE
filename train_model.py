@@ -12,7 +12,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import LabelEncoder
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from backend.preprocess import preprocess
 
 print("Loading dataset...")

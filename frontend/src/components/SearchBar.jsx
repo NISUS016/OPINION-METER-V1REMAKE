@@ -118,7 +118,7 @@ function SearchBar({ onSearch, loading }) {
   }, [])
 
   return (
-    <div className="relative mb-8">
+    <div ref={dropdownRef} className="relative mb-8">
       <form onSubmit={handleSubmit} className="flex gap-2">
         <div className="relative flex-1">
           <input
@@ -174,7 +174,6 @@ function SearchBar({ onSearch, loading }) {
 
       {showDropdown && suggestions.length > 0 && (
         <div
-          ref={dropdownRef}
           className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
         >
           {suggestions.map((name, i) => (

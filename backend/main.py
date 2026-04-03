@@ -2,7 +2,7 @@ import glob
 import os
 import pandas as pd
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
@@ -15,11 +15,16 @@ product_names = []
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global df, product_names
-    # Support running from both root and backend/ directory
+    # Support running from both project root and backend/ directory
+    files = []
     for path in ["flipkart-dataset", "../flipkart-dataset"]:
         files = glob.glob(f"{path}/*.csv")
         if files:
             break
+    if not files:
+        raise RuntimeError(
+            "Dataset not found. Place the CSV in flipkart-dataset/ at the project root."
+        )
     df = pd.read_csv(files[0], usecols=["product_name", "Review", "Sentiment"])
     df["Sentiment"] = df["Sentiment"].str.strip().str.lower()
     df.dropna(subset=["Review", "Sentiment"], inplace=True)
@@ -46,33 +51,36 @@ def health():
 def suggest(q: str = Query(..., min_length=1), limit: int = Query(10)):
     q_lower = q.lower()
     starts_with = [name for name in product_names if name.lower().startswith(q_lower)]
-    contains = [name for name in product_names if q_lower in name.lower() and not name.lower().startswith(q_lower)]
-    combined = starts_with + contains
-    return {"suggestions": combined[:limit]}
+    contains = [
+        name
+        for name in product_names
+        if q_lower in name.lower() and not name.lower().startswith(q_lower)
+    ]
+    return {"suggestions": (starts_with + contains)[:limit]}
 
 
 @app.get("/search")
 def search(q: str = Query(...), limit: int = Query(50)):
     global df
-    # Cap limit to prevent abuse
     limit = min(limit, 200)
-    # Step 1: Try exact match (case-insensitive)
+    # Step 1: Exact match (case-insensitive)
     exact = df[df["product_name"].str.strip().str.lower() == q.strip().lower()]
     if len(exact) > 0:
         matches = exact
     else:
-        # Step 2: Substring match on product_name only
-        matches = df[df["product_name"].str.contains(q, case=False, na=False)]
+        # Step 2: Substring match — regex=False prevents crashes on special chars
+        matches = df[
+            df["product_name"].str.contains(q, case=False, na=False, regex=False)
+        ]
     matches = matches.head(limit)
-    reviews = []
-    for _, row in matches.iterrows():
-        reviews.append(
-            {
-                "product_name": row["product_name"],
-                "text": row["Review"],
-                "sentiment": row["Sentiment"],
-            }
-        )
+    reviews = [
+        {
+            "product_name": row["product_name"],
+            "text": row["Review"],
+            "sentiment": row["Sentiment"],
+        }
+        for _, row in matches.iterrows()
+    ]
     return {"query": q, "count": len(reviews), "reviews": reviews}
 
 
@@ -86,8 +94,8 @@ def analyze(body: AnalyzeRequest):
     summary = {"positive": 0, "neutral": 0, "negative": 0, "total": len(body.reviews)}
     for text in body.reviews:
         pred = predict(text)
-        results.append(
-            {"text": text, "label": pred["label"], "confidence": pred["confidence"]}
-        )
-        summary[pred["label"]] += 1
+        label = pred["label"]
+        results.append({"text": text, "label": label, "confidence": pred["confidence"]})
+        if label in summary:
+            summary[label] += 1
     return {"summary": summary, "results": results}

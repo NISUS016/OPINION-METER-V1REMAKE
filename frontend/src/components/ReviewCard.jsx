@@ -2,6 +2,7 @@ const badgeColors = {
   positive: "bg-green-100 text-green-800",
   neutral: "bg-amber-100 text-amber-800",
   negative: "bg-red-100 text-red-800",
+  default: "bg-gray-100 text-gray-800",
 }
 
 function ReviewCard({ text, product_name, label, confidence }) {
@@ -14,7 +15,7 @@ function ReviewCard({ text, product_name, label, confidence }) {
           {product_name}
         </h4>
         <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${badgeColors[label]}`}
+          className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${badgeColors[label] ?? badgeColors.default}`}
         >
           {label} ({(confidence * 100).toFixed(0)}%)
         </span>

@@ -29,7 +29,6 @@ function App() {
 
       if (searchData.reviews.length === 0) {
         setError("No reviews found for this product.")
-        setLoading(false)
         return
       }
 
