@@ -11,7 +11,15 @@ function ResultsChart({ summary }) {
     { name: "Positive", value: summary.positive, color: COLORS.positive },
     { name: "Neutral", value: summary.neutral, color: COLORS.neutral },
     { name: "Negative", value: summary.negative, color: COLORS.negative },
-  ]
+  ].filter((d) => d.value > 0)
+
+  if (data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow p-4 mb-6 text-center text-gray-500">
+        No sentiment data to display
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white rounded-lg shadow p-4 mb-6">

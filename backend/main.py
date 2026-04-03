@@ -1,4 +1,5 @@
 import glob
+import os
 import pandas as pd
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
@@ -14,7 +15,11 @@ product_names = []
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global df, product_names
-    files = glob.glob("../flipkart-dataset/*.csv")
+    # Support running from both root and backend/ directory
+    for path in ["flipkart-dataset", "../flipkart-dataset"]:
+        files = glob.glob(f"{path}/*.csv")
+        if files:
+            break
     df = pd.read_csv(files[0], usecols=["product_name", "Review", "Sentiment"])
     df["Sentiment"] = df["Sentiment"].str.strip().str.lower()
     df.dropna(subset=["Review", "Sentiment"], inplace=True)
@@ -40,7 +45,6 @@ def health():
 @app.get("/suggest")
 def suggest(q: str = Query(..., min_length=1), limit: int = Query(10)):
     q_lower = q.lower()
-    # Priority: starts-with matches first, then contains matches
     starts_with = [name for name in product_names if name.lower().startswith(q_lower)]
     contains = [name for name in product_names if q_lower in name.lower() and not name.lower().startswith(q_lower)]
     combined = starts_with + contains
@@ -50,6 +54,8 @@ def suggest(q: str = Query(..., min_length=1), limit: int = Query(10)):
 @app.get("/search")
 def search(q: str = Query(...), limit: int = Query(50)):
     global df
+    # Cap limit to prevent abuse
+    limit = min(limit, 200)
     # Step 1: Try exact match (case-insensitive)
     exact = df[df["product_name"].str.strip().str.lower() == q.strip().lower()]
     if len(exact) > 0:

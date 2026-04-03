@@ -3,6 +3,7 @@ import SearchBar from "./components/SearchBar"
 import ResultsChart from "./components/ResultsChart"
 import ReviewCard from "./components/ReviewCard"
 
+// Works in dev (proxied) and prod (same-origin with backend)
 const API_URL = "/api"
 
 function App() {
@@ -94,9 +95,9 @@ function App() {
           <ResultsChart summary={summary} />
 
           <div className="space-y-3">
-            {results.map((review, i) => (
+            {results.map((review) => (
               <ReviewCard
-                key={i}
+                key={`${review.product_name}-${review.text.slice(0, 30)}`}
                 text={review.text}
                 product_name={review.product_name}
                 label={review.label}
