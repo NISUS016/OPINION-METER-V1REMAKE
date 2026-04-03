@@ -5,6 +5,7 @@ flipkart-dataset/
 backend/models/
 
 # Python
+venv/
 __pycache__/
 *.pyc
 *.pkl
