@@ -3,7 +3,7 @@ import SearchBar from "./components/SearchBar"
 import ResultsChart from "./components/ResultsChart"
 import ReviewCard from "./components/ReviewCard"
 
-const API_URL = ""
+const API_URL = "/api"
 
 function App() {
   const [query, setQuery] = useState("")

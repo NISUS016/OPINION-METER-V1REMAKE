@@ -1,14 +1,14 @@
 # Dataset — too large for git
 flipkart-dataset/
 
-# Trained model files
-backend/models/
+# Trained model files — only model.pkl is tracked
+backend/models/*
+!backend/models/model.pkl
 
 # Python
 venv/
 __pycache__/
 *.pyc
-*.pkl
 
 # Node
 node_modules/

@@ -14,7 +14,7 @@ product_names = []
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global df, product_names
-    files = glob.glob("flipkart-dataset/*.csv")
+    files = glob.glob("../flipkart-dataset/*.csv")
     df = pd.read_csv(files[0], usecols=["product_name", "Review", "Sentiment"])
     df["Sentiment"] = df["Sentiment"].str.strip().str.lower()
     df.dropna(subset=["Review", "Sentiment"], inplace=True)

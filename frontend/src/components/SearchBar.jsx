@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 
-const API_URL = ""
+const API_URL = "/api"
 
 function highlightMatch(text, query) {
   if (!query) return text
