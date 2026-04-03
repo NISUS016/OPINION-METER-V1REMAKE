@@ -1,0 +1,30 @@
+# Setup Log - OpinionMeter V1 Remake
+
+1. **Dataset Preparation:**
+   - Created directory `OPINION-METER-V1REMAKE/flipkart-dataset`.
+   - Moved dataset file from `OPINION-METER-V1REMAKE/archive/Dataset-SA.csv` to `OPINION-METER-V1REMAKE/flipkart-dataset/Dataset-SA.csv` as per design specifications.
+
+2. **Dependency Installation:**
+   - Installed core Python dependencies for training and backend: `pandas`, `scikit-learn`, `nltk`, `joblib`, `fastapi`, `uvicorn[standard]`, `python-multipart`.
+   - Successfully installed all required Node.js dependencies for the initial and new frontend.
+
+3. **Model Training:**
+   - Executed `python train_model.py`.
+   - Preprocessed the Flipkart dataset (~205,000 reviews).
+   - Trained three models: Logistic Regression, Naive Bayes, and Linear SVM.
+   - Selected the **Linear SVM** model (highest accuracy: 0.9110).
+   - Saved the trained model, TF-IDF vectorizer, and label encoder to `backend/models/`.
+
+4. **Frontend Replacement:**
+   - Dumped the old frontend to `frontend_old`.
+   - Replaced `frontend` with the contents of `frontend-2`.
+   - Updated `App.tsx` and `vite.config.ts` to connect to the backend API seamlessly.
+   - New frontend features a "Precision Intelligence" design with a landing, loading, and dashboard view.
+
+5. **System Startup:**
+   - Backend: `uvicorn main:app --port 8000` (Running)
+   - Frontend: `npm run dev` (Running on port 3000)
+
+**Current Status:**
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
