@@ -78,6 +78,7 @@ def search(q: str = Query(...), limit: int = Query(50)):
             "product_name": row["product_name"],
             "text": row["Review"],
             "sentiment": row["Sentiment"],
+            "rate": row["Rate"],
         }
         for _, row in matches.iterrows()
     ]

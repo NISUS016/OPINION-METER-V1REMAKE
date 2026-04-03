@@ -67,14 +67,6 @@ function SearchBar({ onSearch, loading }) {
     }
   }
 
-  const handleClear = () => {
-    setQuery("")
-    setSuggestions([])
-    setShowDropdown(false)
-    setActiveIndex(-1)
-    inputRef.current?.focus()
-  }
-
   const handleKeyDown = (e) => {
     if (!showDropdown || suggestions.length === 0) {
       if (e.key === "Enter") {
@@ -111,81 +103,56 @@ function SearchBar({ onSearch, loading }) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [])
-
   return (
-    <div ref={dropdownRef} className="relative mb-8">
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <div className="relative flex-1">
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
-            placeholder="Search product reviews..."
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg pr-10"
-          />
-          {query && !loading && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none"
-            >
-              &times;
-            </button>
+    <div ref={dropdownRef} className="relative w-full">
+      <form onSubmit={handleSubmit} className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
+          placeholder="Search products..."
+          className="w-full bg-gray-50 border border-gray-100 px-10 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all text-sm"
+        />
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+          {loading ? (
+             <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+             </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           )}
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium text-lg"
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              Searching...
-            </span>
-          ) : (
-            "Search"
-          )}
-        </button>
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </form>
 
       {showDropdown && suggestions.length > 0 && (
-        <div
-          className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto"
-        >
+        <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-64 overflow-y-auto">
           {suggestions.map((name, i) => (
             <button
               key={i}
               type="button"
-              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 flex items-center gap-2 ${
-                i === activeIndex ? "bg-blue-100" : ""
+              className={`w-full text-left px-4 py-3 text-sm flex items-center gap-3 transition-colors ${
+                i === activeIndex ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50 text-gray-600"
               }`}
               onMouseDown={() => handleSelect(name)}
             >
-              <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <span className="truncate">{highlightMatch(name, query)}</span>
