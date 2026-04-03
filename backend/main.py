@@ -8,15 +8,18 @@ from typing import List
 from predict import predict
 
 df = None
+product_names = []
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global df
+    global df, product_names
     files = glob.glob("flipkart-dataset/*.csv")
     df = pd.read_csv(files[0], usecols=["product_name", "Review", "Sentiment"])
     df["Sentiment"] = df["Sentiment"].str.strip().str.lower()
     df.dropna(subset=["Review", "Sentiment"], inplace=True)
+    # Build a deduplicated, sorted list of product names for autocomplete
+    product_names = sorted(df["product_name"].dropna().unique().tolist())
     yield
 
 
@@ -33,6 +36,15 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/suggest")
+def suggest(q: str = Query(..., min_length=1), limit: int = Query(10)):
+    """Return product names that contain the search prefix (case-insensitive)."""
+    global product_names
+    q_lower = q.lower()
+    matches = [name for name in product_names if q_lower in name.lower()]
+    return {"suggestions": matches[:limit]}
 
 
 @app.get("/search")
