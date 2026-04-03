@@ -1,0 +1,21 @@
+# Dataset — too large for git
+flipkart-dataset/
+
+# Trained model files
+backend/models/
+
+# Python
+__pycache__/
+*.pyc
+*.pkl
+
+# Node
+node_modules/
+dist/
+
+# Env
+.env
+.env.local
+
+# Ruff
+.ruff_cache/
