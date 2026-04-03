@@ -5,8 +5,11 @@ from preprocess import preprocess
 model_path = os.path.join(os.path.dirname(__file__), "models", "model.pkl")
 vectorizer_path = os.path.join(os.path.dirname(__file__), "models", "vectorizer.pkl")
 
-model = pickle.load(open(model_path, "rb"))
-vectorizer = pickle.load(open(vectorizer_path, "rb"))
+with open(model_path, "rb") as f:
+    model = pickle.load(f)
+
+with open(vectorizer_path, "rb") as f:
+    vectorizer = pickle.load(f)
 
 
 def predict(text: str) -> dict:

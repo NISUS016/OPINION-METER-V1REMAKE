@@ -3,7 +3,7 @@ import SearchBar from "./components/SearchBar"
 import ResultsChart from "./components/ResultsChart"
 import ReviewCard from "./components/ReviewCard"
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
+const API_URL = ""
 
 function App() {
   const [query, setQuery] = useState("")

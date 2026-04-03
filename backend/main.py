@@ -1,7 +1,7 @@
 import glob
 import pandas as pd
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
@@ -18,7 +18,6 @@ async def lifespan(app: FastAPI):
     df = pd.read_csv(files[0], usecols=["product_name", "Review", "Sentiment"])
     df["Sentiment"] = df["Sentiment"].str.strip().str.lower()
     df.dropna(subset=["Review", "Sentiment"], inplace=True)
-    # Build a deduplicated, sorted list of product names for autocomplete
     product_names = sorted(df["product_name"].dropna().unique().tolist())
     yield
 
@@ -40,19 +39,24 @@ def health():
 
 @app.get("/suggest")
 def suggest(q: str = Query(..., min_length=1), limit: int = Query(10)):
-    """Return product names that contain the search prefix (case-insensitive)."""
-    global product_names
     q_lower = q.lower()
-    matches = [name for name in product_names if q_lower in name.lower()]
-    return {"suggestions": matches[:limit]}
+    # Priority: starts-with matches first, then contains matches
+    starts_with = [name for name in product_names if name.lower().startswith(q_lower)]
+    contains = [name for name in product_names if q_lower in name.lower() and not name.lower().startswith(q_lower)]
+    combined = starts_with + contains
+    return {"suggestions": combined[:limit]}
 
 
 @app.get("/search")
 def search(q: str = Query(...), limit: int = Query(50)):
     global df
-    matches = df[df["product_name"].str.contains(q, case=False, na=False)]
-    if len(matches) < 10:
-        matches = df[df["Review"].str.contains(q, case=False, na=False)]
+    # Step 1: Try exact match (case-insensitive)
+    exact = df[df["product_name"].str.strip().str.lower() == q.strip().lower()]
+    if len(exact) > 0:
+        matches = exact
+    else:
+        # Step 2: Substring match on product_name only
+        matches = df[df["product_name"].str.contains(q, case=False, na=False)]
     matches = matches.head(limit)
     reviews = []
     for _, row in matches.iterrows():
