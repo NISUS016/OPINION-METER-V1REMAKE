@@ -24,6 +24,7 @@ function App() {
       const searchRes = await fetch(
         `${API_URL}/search?q=${encodeURIComponent(searchQuery)}&limit=50`
       )
+      if (!searchRes.ok) throw new Error(`Search failed: ${searchRes.status}`)
       const searchData = await searchRes.json()
 
       if (searchData.reviews.length === 0) {
@@ -39,6 +40,10 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reviews: reviewTexts }),
       })
+      if (!analyzeRes.ok) {
+        const errBody = await analyzeRes.json().catch(() => ({}))
+        throw new Error(`Analysis failed: ${analyzeRes.status} ${errBody.detail || ""}`)
+      }
       const analyzeData = await analyzeRes.json()
 
       const combinedResults = searchData.reviews.map((review, i) => ({
@@ -50,7 +55,8 @@ function App() {
       setResults(combinedResults)
       setSummary(analyzeData.summary)
     } catch (err) {
-      setError("Failed to fetch results. Is the backend running?")
+      console.error(err)
+      setError(`Failed to fetch results: ${err.message}`)
     } finally {
       setLoading(false)
     }
