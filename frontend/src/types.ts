@@ -1,20 +1,9 @@
-export type Sentiment = 'positive' | 'neutral' | 'negative';
-
-export interface Review {
-  id: string;
-  text: string;
-  source: string;
-  timeAgo: string;
-  sentiment: Sentiment;
-  confidence: number;
-}
-
 export interface ProductAnalysis {
   id: string;
   name: string;
   category: string;
   verdict: string;
-  overallSentiment: Sentiment;
+  overallSentiment: 'positive' | 'neutral' | 'negative';
   confidence: number;
   breakdown: {
     positive: number;
@@ -28,9 +17,26 @@ export interface ProductAnalysis {
   reviews: Review[];
 }
 
+export interface Review {
+  product_name: string;
+  text: string;
+  sentiment: string;
+  rate?: string | number;
+  short_label?: string;
+  label?: string;
+  confidence?: number;
+}
+
 export interface SearchResult {
   id: string;
   name: string;
   verdict: string;
-  type: string;
+  type: 'tech' | 'audio' | 'fashion' | 'home';
+}
+
+export interface AnalysisSummary {
+  positive: number;
+  neutral: number;
+  negative: number;
+  total: number;
 }

@@ -28,3 +28,33 @@
 **Current Status:**
 - Backend: http://localhost:8000
 - Frontend: http://localhost:3000
+
+6. **Bug Fixes & Dataset Optimization:**
+   - Fixed a backend Internal Server Error (500) caused by a missing 'Rate' column in the pandas `usecols` parameter.
+   - Updated the data pipeline to use the 'Summary' column for the primary review text, providing more detailed, authentic feedback compared to the short 'Review' labels.
+   - Integrated 'short_label' (original Review column) into the UI for additional context (e.g., "super!", "awesome").
+
+7. **UI Refinements:**
+   - Implemented `truncateWords` utility to cap reviews at 100 words with a "..." suffix.
+   - Reduced review font sizes and improved padding for a cleaner "Individual Evidence" layout.
+   - Removed unnecessary UI elements (notifications, settings, profile icons, analytics link) to streamline the dashboard.
+   - Removed the "AI Prediction" label from the sentiment display to reduce visual clutter.
+
+8. **New Features:**
+   - Implemented a persistent Session History system.
+   - Added a dedicated "History" view that allows users to revisit and re-analyze previously searched products.
+   - Clicking "Opinion-Meter" logo now correctly navigates back to the landing page.
+
+9. **V2 Architecture & Feature Set (Completed):**
+   - **Codebase Refactoring:** Successfully split the monolithic `App.tsx` into a modular architecture using dedicated components (`LandingView`, `LoadingView`, `DashboardView`, `HistoryView`, `ReviewCard`, `Footer`).
+   - **Backend Caching:** Implemented in-memory caching for both search and analysis endpoints to provide near-instantaneous results for repeated queries.
+   - **Dark Mode Removal:** Removed dark mode functionality and associated styling to maintain a consistent, professional light theme.
+   - **Review Filtering & Sorting:** Integrated dynamic filtering (Positive/Neutral/Negative) and sorting (Highest/Lowest Rating) in the dashboard.
+   - **Enhanced Data Visualization:** Replaced the standard bar chart with a high-impact Donut chart for sentiment composition.
+   - **Data Export:** Added "Export CSV" functionality to download analysis reports directly from the dashboard.
+   - **UI/UX Polishing:** Improved responsiveness, added dark-mode themed scrollbars, and refined typography.
+
+**Final Status:** 
+The application is fully optimized, feature-rich, and ready for production-level analysis.
+- Backend: http://localhost:8000 (with Caching)
+- Frontend: http://localhost:3000 (Modular, Dark Mode, Filtering)
